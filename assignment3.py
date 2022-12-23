@@ -1,0 +1,150 @@
+import helper
+import sim_parameters
+import pandas as pd
+import numpy as np
+import datetime
+
+# Four parameters are passed to a run() function that are countries csv data file name, countries list, start date, end date, sample ratio.
+def run(countries_csv_name, countries, start_date, end_date, sample_ratio):
+    # Reading the given csv file to data.
+    data = pd.read_csv(countries_csv_name)
+    # Copying transition probabilites from sim_parameters to transition_probs variable
+    transition_probs = sim_parameters.TRASITION_PROBS
+    # Copying holding time from sim_parameters to holding_times variable
+    holding_times = sim_parameters.HOLDING_TIMES
+    # Assigning inital "H" state to curr_state
+    curr_state = "H"
+    #It is written to ignore the chained indexing warnings, because I have used
+    pd.options.mode.chained_assignment=None
+    # Extracting data of given countries from data to sample
+    sample = data[data["country"].isin(countries)]
+    # Converting data in to sample data according to given conditon in the problem statement
+    sample['population'] = round(sample['population']//sample_ratio)
+    sample['less_5'] = round((sample['less_5']*sample['population'])//100)
+    sample['5_to_14'] = round((sample['5_to_14']*sample['population'])//100)
+    sample['15_to_24'] = round((sample['15_to_24']*sample['population'])//100)
+    sample['25_to_64'] = round((sample['25_to_64']*sample['population'])//100)
+    sample['over_65'] = round((sample['over_65']*sample['population'])//100)
+    
+    # A new data frame with required columns is created and assigned to sampledf
+    sampledf = pd.DataFrame(columns=["id", "age_group_name", "country"])
+    # Creating empty lists to store the id, age_groups and country names
+    id1 = []
+    agegrpnm1 = []
+    country1 = []
+    # sample.shape gives the size of sample dataframe (rows,columns)
+    for i in range(sample.shape[0]):
+        # iloc is used to identify the specific row index
+        # By using sample data the created lists will be appended with Id data, age_group data and contries data.
+        for j in range(int(sample.iloc[i]["less_5"])):
+            j = len(id1)
+            id1.append(j)
+            agegrpnm1.append("less_5")
+            country1.append(sample.iloc[i]["country"])
+        for j in range(int(sample.iloc[i]["5_to_14"])):
+            j = len(id1)
+            id1.append(j)
+            agegrpnm1.append("5_to_14")
+            country1.append(sample.iloc[i]["country"])
+        for j in range(int(sample.iloc[i]["15_to_24"])):
+            j = len(id1)
+            id1.append(j)
+            agegrpnm1.append("15_to_24")
+            country1.append(sample.iloc[i]["country"])
+        for j in range(int(sample.iloc[i]["25_to_64"])):
+            j = len(id1)
+            id1.append(j)
+            agegrpnm1.append("25_to_64")
+            country1.append(sample.iloc[i]["country"])
+        for j in range(int(sample.iloc[i]["over_65"])):
+            j = len(id1)
+            id1.append(j)
+            agegrpnm1.append("over_65")
+            country1.append(sample.iloc[i]["country"])
+    # Inserting list data into corresponding columns of sampledf dataframe
+    sampledf["id"] = id1
+    sampledf["age_group_name"] = agegrpnm1
+    sampledf["country"] = country1
+    # Creating a new df1 dataframe with given column names = ["id", "age_group_name", "country", "date", "state", "staying_days", "prev_state"]
+    df1 = pd.DataFrame(columns=["person_id", "age_group_name", "country",
+                                "date", "state", "staying_days", "prev_state"])
+    id = []
+    age_group_name = []
+    country = []
+    date = []
+    state = []
+    staying_days = []
+    prev_state = []
+    for i in range(sampledf.shape[0]):
+        sd = start_date
+        ed = end_date
+        #Here the given string type of date is converted into datetime format 
+        sd = datetime.datetime(
+            int(sd.split("-")[0]), int(sd.split("-")[1]), int(sd.split("-")[2]))
+        ed = datetime.datetime(
+            int(ed.split("-")[0]), int(ed.split("-")[1]), int(ed.split("-")[2]))
+        #The total no of days will be stored in r
+        r = int(str(ed-sd).split()[0])
+        temp = 0
+        # initial previous state
+        p_state = "H"
+        j = 0
+        while j <= r:
+            temp += 1
+            stayd = holding_times[sampledf.iloc[i]
+                                  ["age_group_name"]][curr_state]
+            id.append(sampledf.iloc[i]['id'])
+            
+            age_group_name.append(sampledf.iloc[i]["age_group_name"])
+            country.append(sampledf.iloc[i]["country"])
+            date.append(str(sd).split()[0])
+            sd = sd+datetime.timedelta(days=1)
+            state.append(curr_state)
+            prev_state.append(p_state)
+            p_state = curr_state
+            staying_days.append(stayd)
+            # after being in each state for prescribed number of states, we are then changing the current state
+            if stayd == temp or stayd == 0:
+                next_state = np.random.choice(list(transition_probs[sampledf.iloc[i]["age_group_name"]][curr_state].keys()), p=list(
+                    transition_probs[sampledf.iloc[i]["age_group_name"]][curr_state].values()))
+                temp = holding_times[sampledf.iloc[i]
+                                     ["age_group_name"]][curr_state]
+                p_state = curr_state
+                curr_state = next_state
+                temp = 0
+
+            j += 1
+        # for every person initial state is initialised to "H"
+        curr_state = 'H'
+    # storing the list data into df1 data frame columns
+    df1["person_id"] = id
+    df1["age_group_name"] = age_group_name
+    df1["country"] = country
+    df1["date"] = date
+    df1["state"] = state
+    df1["staying_days"] = staying_days
+    df1["prev_state"] = prev_state
+    
+    #saving df1 to a3-covid-simulated-timeseries.csv and index is used to remove the first index column in the csv file
+    df1.to_csv('a3-covid-simulated-timeseries.csv',index=False)
+    #print(df1)
+    #reading the generated csv file for summary analysis
+    df = pd.read_csv('a3-covid-simulated-timeseries.csv')
+   
+    # grouping data based on country, date, state to generate long table
+    p = df.groupby(['country', 'date', 'state']).agg(
+        {'state': len}).rename(columns={'state': 'count'}).reset_index()
+    
+       
+    #converting long table in to wide table
+    q = pd.pivot(p, index=['date', 'country'], columns='state',
+                 values='count')
+
+    #fillna(0) below is used to set 0 to all NaN values
+    q = q.fillna(0)
+    #astype(int) below is used to convert all float values into integers
+    q = q.astype('int')
+    #print(q)
+    # saving data into  a3-ovid-summary-timeseries.csv file
+    q.to_csv('a3-covid-summary-timeseries.csv')
+    helper.create_plot('a3-covid-summary-timeseries.csv',countries)
